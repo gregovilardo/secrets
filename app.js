@@ -4,8 +4,10 @@ const express = require("express");
 const ejs = require("ejs");
 const app = express();
 const mongoose = require("mongoose");
-const encrypt = require('mongoose-encryption');
+const encrypt = require("mongoose-encryption");
 const port = 3000;
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
 
 app.use(express.urlencoded({ enabled: true }));
 app.set("view engine", "ejs");
@@ -22,9 +24,9 @@ const userSchema = new mongoose.Schema({
 });
 // put this before your user model, becouse the user model use this plugin
 // const secret = "Thisisourlittlesecret."; //this should not be on your app.js file, anybody with this and the same package could break your security
-//now the secret key is fixed becouse we saved in an .env file outside the app.js 
-const secret = process.env.SECRET;
-userSchema.plugin(encrypt, { secret: secret, encryptedFields: ["password"] });
+//now the secret key is fixed becouse we saved in an .env file outside the app.js
+// const secret = process.env.SECRET;
+// userSchema.plugin(encrypt, { secret: secret, encryptedFields: ["password"] });
 //this encrypt when you call save and decrypt when you call find
 
 const User = new mongoose.model("User", userSchema);
@@ -42,14 +44,19 @@ app.route("/login")
     .post((req, res) => {
         let email = req.body.username;
         let password = req.body.password;
-        let userData = [];
+
         User.findOne({ email: email }, (err, userFound) => {
             if (err) {
                 console.log(err);
             } else if (userFound) {
-                if (password === userFound.password) {
-                    res.render("secrets");
-                }
+                bcrypt.compare(password, userFound.password, (err, response) => {
+                    if (err) {
+                        console.log(err)
+                    }
+                    if (response) {
+                        res.render("secrets")
+                    }
+                })
             } else {
                 console.log("That email is not register on the site");
             }
@@ -63,16 +70,18 @@ app.route("/register")
     })
 
     .post((req, res) => {
-        const newUser = new User({
-            email: req.body.username,
-            password: req.body.password,
-        });
-        newUser.save((err) => {
-            if (err) {
-                console.log(err);
-            } else {
-                res.render("secrets");
-            }
+        bcrypt.hash(req.body.password, saltRounds, (err, hash) => {
+            const newUser = new User({
+                email: req.body.username,
+                password: hash,
+            });
+            newUser.save((err) => {
+                if (err) {
+                    console.log(err);
+                } else {
+                    res.render("secrets");
+                }
+            });
         });
     });
 
